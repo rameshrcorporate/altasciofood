@@ -149,7 +149,7 @@ def main():
     st.set_page_config(layout="wide", page_title="Food Wastage Dashboard")
     st.image("logo.png", width=150)
     #st.title("\U0001F372 Waste Watch Analytics Dashboard")
-    #st.title("Waste Watch Analytics Dashboard")
+    st.title("Waste Watch Analytics Dashboard")
 
     uploaded_file = st.sidebar.file_uploader("Upload Excel File", type=["xlsx"])
     
