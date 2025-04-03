@@ -123,9 +123,31 @@ def render_visualizations(df, currency):
     st.subheader("Cost vs. Weight")
     st.plotly_chart(px.scatter(df, x="Weight", y="Cost", color="Loss Reason", title=f"Cost ({currency}) vs Weight (kg)", labels={"Weight": "Weight (kg)", "Cost": "Cost ($)"}))
 
+    # st.subheader("Monthly Wastage Comparison")
+    # monthly_chart = df.groupby("Month").agg({"Cost": "sum", "Weight": "sum"}).reset_index()
+    # st.plotly_chart(px.bar(monthly_chart, x="Month", y=["Cost", "Weight"], barmode='group', title="Monthly Wastage Comparison"))
     st.subheader("Monthly Wastage Comparison")
-    monthly_chart = df.groupby("Month").agg({"Cost": "sum", "Weight": "sum"}).reset_index()
-    st.plotly_chart(px.bar(monthly_chart, x="Month", y=["Cost", "Weight"], barmode='group', title="Monthly Wastage Comparison"))
+
+    # Extract actual month for sorting
+    df["MonthDate"] = pd.to_datetime(df["Date"]).dt.to_period("M").dt.to_timestamp()
+    df["MonthLabel"] = df["MonthDate"].dt.strftime("%b %Y")
+
+    # Group and sort by MonthDate
+    monthly_chart = df.groupby(["MonthDate", "MonthLabel"]).agg({"Cost": "sum", "Weight": "sum"}).reset_index()
+    monthly_chart = monthly_chart.sort_values("MonthDate")  # ✅ ensure correct order
+
+    fig = px.bar(
+        monthly_chart,
+        x="MonthLabel",  # ✅ display clean month/year
+        y=["Cost", "Weight"],
+        barmode="group",
+        title="Monthly Wastage Comparison"
+    )
+
+    fig.update_layout(xaxis_title="Month", yaxis_title="Value")
+    st.plotly_chart(fig, use_container_width=True)
+
+
 
     st.subheader("Cost per KG by Site")
     site_cost_chart = df.groupby("Site").apply(lambda x: x["Cost"].sum() / x["Weight"].sum() if x["Weight"].sum() else 0).reset_index(name="Cost per KG")
@@ -247,7 +269,7 @@ def render_visualizations(df, currency):
 
 # Main App
 def main():
-    st.set_page_config(layout="wide", page_title="Food Wastage Dashboard")
+    st.set_page_config(layout="wide", page_title="Waste Watch")
     st.image("logo.png", width=150)
     #st.title("\U0001F372 Waste Watch Analytics Dashboard")
     st.title("Waste Watch Analytics Dashboard")
