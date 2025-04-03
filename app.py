@@ -74,7 +74,7 @@ def apply_filters(df):
 def render_visualizations(df, currency):
     st.subheader("Wastage Trend Over Time")
     time_series = df.groupby("Date").agg({"Cost": "sum"}).reset_index()
-    st.plotly_chart(px.line(time_series, x="Date", y="Cost", title="Wastage Cost Over Time ($)"))
+    st.plotly_chart(px.line(time_series, x="Date", y="Cost", title="Wastage Cost Over Time ({currency})"))
 
     st.subheader("Wastage by Loss Reason")
     reason_chart = df["Loss Reason"].value_counts().reset_index()
@@ -284,7 +284,7 @@ def main():
             currency_values = df["Currency"].dropna().unique()
             currency = currency_values[0] if len(currency_values) == 1 else ""
         else:
-            currency = "$"
+            currency = "{currency}"
 
         if df is not None:
             df_filtered = apply_filters(df)
