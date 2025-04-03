@@ -1,13 +1,10 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from prophet import Prophet
 
 # Load Data
 @st.cache_data
-
 def load_raw_data(uploaded_file):
-    
     if uploaded_file:
         df = pd.read_excel(uploaded_file)
         df["Date"] = pd.to_datetime(df["Date"])
@@ -18,7 +15,7 @@ def load_raw_data(uploaded_file):
         return None
 
 # KPI Cards
-def display_kpis(df, currency):
+def display_kpis(df, currency="$"):
     total_cost = df["Cost"].sum()
     total_weight = df["Weight"].sum()
     avg_cost_per_kg = total_cost / total_weight if total_weight else 0
@@ -40,38 +37,27 @@ def apply_filters(df):
     df = df[(df["Date"] >= pd.to_datetime(start_date)) & (df["Date"] <= pd.to_datetime(end_date))]
 
     regions = df["Region"].dropna().unique()
-    # selected_region = st.sidebar.selectbox("Select Region", regions)
-    # df = df[df["Region"] == selected_region]
-    selected_regions = st.sidebar.multiselect("Select Region(s)", regions) #  default=list(regions)
-    if selected_regions:
-        df = df[df["Region"].isin(selected_regions)]
-
+    selected_region = st.sidebar.selectbox("Select Region", regions)
+    df = df[df["Region"] == selected_region]
 
     sites = df["Site"].dropna().unique()
-    # selected_site = st.sidebar.selectbox("Select Site", sites)
-    # df = df[df["Site"] == selected_site]
-    selected_sites = st.sidebar.multiselect("Select Site(s)", sites) # , default=list(sites)
-    if selected_sites:
-        df = df[df["Site"].isin(selected_sites)]
+    selected_site = st.sidebar.selectbox("Select Site", sites)
+    df = df[df["Site"] == selected_site]
 
     locations = df["Location"].dropna().unique()
-    # selected_location = st.sidebar.selectbox("Select Location", locations)
-    # df = df[df["Location"] == selected_location]
-    selected_location = st.sidebar.multiselect("Select Location(s)", locations) # , default=list(locations)
-    if selected_location:
-        df = df[df["Location"].isin(selected_location)]    
+    selected_location = st.sidebar.selectbox("Select Location", locations)
+    df = df[df["Location"] == selected_location]
 
     operators = df["Operator"].dropna().unique()
-    selected_operators = st.sidebar.multiselect("Select Operator(s)", operators) # , default=list(operators)
-
-    if selected_operators:
-        df = df[df["Operator"].isin(selected_operators)]
+    selected_operator = st.sidebar.selectbox("Select Operator", ["All"] + list(operators))
+    if selected_operator != "All":
+        df = df[df["Operator"] == selected_operator]
 
     return df
 
 # Visualizations
 
-def render_visualizations(df, currency):
+def render_visualizations(df, currency="$"):
     st.subheader("Wastage Trend Over Time")
     time_series = df.groupby("Date").agg({"Cost": "sum"}).reset_index()
     st.plotly_chart(px.line(time_series, x="Date", y="Cost", title="Wastage Cost Over Time ($)"))
@@ -127,144 +113,39 @@ def render_visualizations(df, currency):
     monthly_chart = df.groupby("Month").agg({"Cost": "sum", "Weight": "sum"}).reset_index()
     st.plotly_chart(px.bar(monthly_chart, x="Month", y=["Cost", "Weight"], barmode='group', title="Monthly Wastage Comparison"))
 
-    st.subheader("Cost per KG by Site")
-    site_cost_chart = df.groupby("Site").apply(lambda x: x["Cost"].sum() / x["Weight"].sum() if x["Weight"].sum() else 0).reset_index(name="Cost per KG")
-    st.plotly_chart(px.bar(site_cost_chart, x="Site", y="Cost per KG", title="Cost per KG by Site"))
-
-    st.subheader("Wastage Cost by Operator")
-    operator_chart = df.groupby("Operator")["Cost"].sum().reset_index().sort_values(by="Cost", ascending=False)
-    st.plotly_chart(px.bar(operator_chart, x="Operator", y="Cost", title="Wastage Cost by Operator"))
-    
     st.subheader("Estimated CO2 Impact (Based on Weight)")
     df["Estimated CO2 (kg)"] = df["Weight"] * 2.5
     co2_chart = df.groupby("Date")["Estimated CO2 (kg)"].sum().reset_index()
     st.plotly_chart(px.area(co2_chart, x="Date", y="Estimated CO2 (kg)", title="Estimated CO2 Emissions from Food Waste"))
-    
+
+    st.subheader("Cost per KG by Site")
+    site_cost_chart = df.groupby("Site").apply(lambda x: x["Cost"].sum() / x["Weight"].sum() if x["Weight"].sum() else 0).reset_index(name="Cost per KG")
+    st.plotly_chart(px.bar(site_cost_chart, x="Site", y="Cost per KG", title="Cost per KG by Site"))
+
     st.subheader("CO2 Emissions by Disposition Method")
     co2_disp_chart = df.groupby("Disposition")["Estimated CO2 (kg)"].sum().reset_index()
     st.plotly_chart(px.bar(co2_disp_chart, x="Disposition", y="Estimated CO2 (kg)", title="CO2 Impact by Disposition Method"))
-    
-    # Forecast Section
-    # import plotly.express as px
-    # from prophet import Prophet
 
-# import plotly.express as px
-# from prophet import Prophet
-
-
-    st.subheader("🔮 Forecast: Future Wastage Cost")
-
-    forecast_days = st.radio("Select forecast period", [30, 60, 90], horizontal=True)
-    
-    try:
-        from prophet import Prophet
-
-        forecast_df = df.groupby("Date")["Cost"].sum().reset_index()
-        forecast_df.columns = ["ds", "y"]
-
-        model = Prophet()
-        model.fit(forecast_df)
-
-        future = model.make_future_dataframe(periods=forecast_days)
-        forecast = model.predict(future)
-
-        # Merge forecast and actuals for Plotly
-        plot_df = forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]].copy()
-        plot_df["type"] = ["Forecast"] * len(plot_df)
-        actual_df = forecast_df.copy()
-        actual_df.columns = ["ds", "y"]
-        actual_df["type"] = "Actual"
-
-        combined = pd.concat([
-            actual_df[["ds", "y", "type"]],
-            plot_df.rename(columns={"yhat": "y"})[["ds", "y", "type"]]
-        ])
-
-        fig = px.line(combined, x="ds", y="y", color="type", labels={"ds": "Date", "y": f"Cost ({currency})"})
-        fig.update_layout(title=f"{forecast_days}-Day Forecast of Wastage Cost", xaxis_title="Date", yaxis_title=f"Cost ({currency})")
-        st.plotly_chart(fig, use_container_width=True)
-        
-    
-
-    except ImportError:
-        st.error("Prophet is not installed. Run `pip install prophet`.")
-    
-    st.subheader("🔮 Forecast: Future Wastage Weight")
-
-    try:
-        # Prepare Weight data
-        weight_df = df.groupby("Date")["Weight"].sum().reset_index()
-        weight_df.columns = ["ds", "y"]
-
-        model_w = Prophet()
-        model_w.fit(weight_df)
-
-        future_w = model_w.make_future_dataframe(periods=forecast_days)
-        forecast_w = model_w.predict(future_w)
-
-        # Merge forecast and actuals
-        plot_w = forecast_w[["ds", "yhat", "yhat_lower", "yhat_upper"]].copy()
-        plot_w["type"] = ["Forecast"] * len(plot_w)
-        actual_w = weight_df.copy()
-        actual_w.columns = ["ds", "y"]
-        actual_w["type"] = "Actual"
-
-        combined_w = pd.concat([
-            actual_w[["ds", "y", "type"]],
-            plot_w.rename(columns={"yhat": "y"})[["ds", "y", "type"]]
-        ])
-
-        fig_w = px.line(combined_w, x="ds", y="y", color="type", labels={"ds": "Date", "y": "Weight (kg)"})
-        fig_w.update_layout(title=f"{forecast_days}-Day Forecast of Wastage Weight", xaxis_title="Date", yaxis_title="Weight (kg)")
-        st.plotly_chart(fig_w, use_container_width=True)
-
-    except Exception as e:
-        st.error(f"Weight forecasting failed: {e}")
-
-
-    
-    except Exception as e:
-        st.error(f"Forecasting failed: {e}")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    st.subheader("Wastage Cost by Operator")
+    operator_chart = df.groupby("Operator")["Cost"].sum().reset_index().sort_values(by="Cost", ascending=False)
+    st.plotly_chart(px.bar(operator_chart, x="Operator", y="Cost", title="Wastage Cost by Operator"))
 
 # Main App
 def main():
     st.set_page_config(layout="wide", page_title="Food Wastage Dashboard")
-    st.image("logo.png", width=150)
-    #st.title("\U0001F372 Waste Watch Analytics Dashboard")
-    st.title("Waste Watch Analytics Dashboard")
+    st.title("\U0001F372 Food Wastage Analytics Dashboard")
 
     uploaded_file = st.sidebar.file_uploader("Upload Excel File", type=["xlsx"])
-    
+    df = None
+    currency = "$"
+
     if uploaded_file:
         df = load_raw_data(uploaded_file)
-        
-        # ✅ Correct placement of currency logic
-        if "Currency" in df.columns:
-            currency_values = df["Currency"].dropna().unique()
-            currency = currency_values[0] if len(currency_values) == 1 else ""
-        else:
-            currency = "$"
-
         if df is not None:
+            if "Currency" in df.columns:
+                unique_currencies = df["Currency"].dropna().unique()
+                if len(unique_currencies) == 1:
+                    currency = unique_currencies[0]
             df_filtered = apply_filters(df)
             display_kpis(df_filtered, currency)
             render_visualizations(df_filtered, currency)
