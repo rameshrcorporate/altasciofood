@@ -4,7 +4,7 @@ import plotly.express as px
 from prophet import Prophet
 
 # Load Data
-# @st.cache_data
+@st.cache_data
 
 def load_raw_data(uploaded_file):
     
