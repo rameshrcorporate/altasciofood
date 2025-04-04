@@ -4,7 +4,7 @@ import plotly.express as px
 from prophet import Prophet
 
 # Load Data
-@st.cache_data
+# @st.cache_data
 
 def load_raw_data(uploaded_file):
     
@@ -270,7 +270,7 @@ def render_visualizations(df, currency):
 # Main App
 def main():
     st.set_page_config(layout="wide", page_title="Waste Watch")
-    st.image("logo.png", width=150)
+    st.image("logo.jpg", width=150)
     #st.title("\U0001F372 Waste Watch Analytics Dashboard")
     st.title("Waste Watch Analytics Dashboard")
 
